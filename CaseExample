@@ -1,0 +1,70 @@
+import os
+from langchain_openai import ChatOpenAI
+from pypdf import PdfReader
+
+# --- models.corp Configuration ---
+
+BASE_URL = "https://granite-3-1-8b-instruct--apicast-staging.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443/v1"
+APP_KEY = os.getenv("MODELS_CORP_KEY") # Set your $YOUR-APPLICATION-KEY here
+
+# Shared LLM instance for all agents
+# Note: Using Granite 3.1 8B Instruct as per your URL
+support_llm = ChatOpenAI(
+    base_url=BASE_URL,
+    api_key=APP_KEY,
+    model="granite-3-1-8b-instruct",
+    streaming=False
+)
+
+# --- The 5-Agent SupportSignal System ---
+
+class SupportSignal:
+    def __init__(self, ticket_id, must_gather_url):
+        self.ticket_id = ticket_id
+        self.must_gather_url = must_gather_url
+        self.context = {}
+
+    def run_workflow(self):
+        print(f"🚀 Starting supportSignal for Ticket: {self.ticket_id}")
+        
+        # 1. Log Analyst: Parse Must-Gather (using the provided URL)
+        # In a real scenario, you'd download and extract here
+        self.context['raw_logs'] = "ERROR: [RHOAI] NVIDIA GPU Operator: Failed to reconcile. Error: VersionMismatch"
+        
+        # 2. Knowledge Retrieval: Search KCS/BZ
+        # Simulating hit from Vector DB
+        self.context['kcs_docs'] = "KCS#7012345: GPU Operator 23.9 requires OCP 4.14+."
+
+        # 3. Domain Specialist: RHOAI specific checks
+        # Logic to check if RHOAI components are 'Ready'
+        self.context['rhoai_status'] = "NotebookController: Degraded"
+
+        # 4. Draft Synthesis: The Consultant
+        draft = self.generate_draft()
+        
+        # 5. Guardian Agent: The Auditor
+        final_validated_report = self.audit_report(draft)
+        
+        return final_validated_report
+
+    def generate_draft(self):
+        prompt = f"""[INST] Generate a Diagnostic Brief.
+        LOGS: {self.context['raw_logs']}
+        KCS: {self.context['kcs_docs']}
+        STATUS: {self.context['rhoai_status']}
+        [/INST]"""
+        return support_llm.invoke(prompt).content
+
+    def audit_report(self, draft):
+        # Using the same endpoint, but with "Guardian" style instructions
+        audit_prompt = f"""[INST] You are Granite Guardian 3.0. 
+        Verify if the following report commands are safe for OCP.
+        REPORT: {draft}
+        [/INST]"""
+        return support_llm.invoke(audit_prompt).content
+
+# --- Execution Trigger ---
+# This mimics the CEE Associate clicking 'Trigger' in your diagram
+agent_system = SupportSignal(ticket_id="12345", must_gather_url="http://s3.redhat.com/mg-123")
+result = agent_system.run_workflow()
+print(f"\n--- Internal Case Comment ---\n{result}")
